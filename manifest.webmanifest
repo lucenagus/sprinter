@@ -1,0 +1,16 @@
+{
+  "name": "Sprinter",
+  "short_name": "Sprinter",
+  "description": "Personal sprints. Commit to a few things each week or month.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#E3E1DC",
+  "theme_color": "#E3E1DC",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

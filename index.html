@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>Sprinter</title>
+  <meta name="description" content="Personal sprints. Commit to a few things each week or month.">
+  <meta name="theme-color" content="#E3E1DC">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Sprinter">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preload" href="fonts/InstrumentSans.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="preload" href="fonts/SometypeMono.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app"></div>
+  <!-- iOS only raises the keyboard for focus() inside a tap; this field takes
+       focus during the tap and hands it to the real input once a sheet opens. -->
+  <input id="kb-proxy" aria-hidden="true" tabindex="-1" autocomplete="off">
+  <script type="module" src="app.js"></script>
+</body>
+</html>
