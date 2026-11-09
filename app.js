@@ -54,7 +54,6 @@ const haptic = (() => {
 const primeKeyboard = () => document.getElementById('kb-proxy')?.focus({ preventScroll: true });
 
 const stop = (fn) => (e) => { e.stopPropagation(); fn(e); };
-const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const pad = (n) => String(n).padStart(2, '0');
 
 function useStore() {
@@ -727,42 +726,7 @@ function Timeline({ s }) {
 
   // Wideview: the emphasis follows the finger. Sprintview: once the strip
   // settles on another sprint, that one opens and the previous one closes.
-  // Scroll lag: each whole sprint column trails the scroll on a spring. The
-  // column in the middle follows tightly, columns further out lag more, so
-  // the gaps stretch and compress during a swipe and settle when it stops.
-  // Uses `translate` (not transform) so it never fights the width transition.
-  const lag = useRef({ vals: new Map(), raf: 0, t: 0 });
-  function runLag() {
-    const L = lag.current;
-    if (L.raf || REDUCED_MOTION) return;
-    const el = scroller.current;
-    L.t = performance.now();
-    const step = (now) => {
-      const dt = Math.min(48, now - L.t);
-      L.t = now;
-      const x = el.scrollLeft;
-      const w = el.clientWidth;
-      const mid = x + w / 2;
-      let moving = false;
-      el.querySelectorAll('.bar, .next').forEach((col, n) => {
-        const d = Math.min(1, Math.abs(col.offsetLeft + col.offsetWidth / 2 - mid) / w);
-        const base = 0.55 - d * 0.47; // follow rate per frame: tight in the middle, loose at the edges
-        const k = 1 - Math.pow(1 - base, dt / 16.7);
-        let v = L.vals.get(n) ?? x;
-        v = animating.current ? x : v + (x - v) * k;
-        let off = 64 * Math.tanh((x - v) / 90); // soft limit
-        if (Math.abs(off) < 0.15) { off = 0; v = x; } else moving = true;
-        L.vals.set(n, v);
-        col.style.translate = off ? `${off.toFixed(2)}px 0` : '';
-      });
-      L.raf = moving ? requestAnimationFrame(step) : 0;
-    };
-    L.raf = requestAnimationFrame(step);
-  }
-  useEffect(() => () => cancelAnimationFrame(lag.current.raf), []);
-
   function onScroll() {
-    runLag();
     if (animating.current) return;
     if (modeRef.current === 'wide') {
       const i = middleIndex();

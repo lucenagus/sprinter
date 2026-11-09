@@ -1,6 +1,6 @@
 // Offline support. Network first, so a new version shows up as soon as the
 // phone is online; the cache answers when it isn't.
-const CACHE = 'sprinter-v58';
+const CACHE = 'sprinter-v59';
 const ASSETS = [
   './', './index.html', './styles.css', './app.js', './store.js', './emoji.js', './emoji-data.js', './icons.js', './logo.svg',
   './vendor/preact-htm.js', './manifest.webmanifest',
