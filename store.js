@@ -17,7 +17,21 @@
 //   sprint on: past sprints keep the settings they had. Each stretch of sprints
 //   sharing settings is an "era".
 
-const KEY = 'sprinter.v1';
+// Demo mode keeps its own sample data under a separate key, so turning it on
+// or off never touches the real sprints.
+const MODE_KEY = 'sprinter.mode';
+const DEMO_KEY = 'sprinter.demo';
+export const isDemo = (() => { try { return localStorage.getItem(MODE_KEY) === 'demo'; } catch { return false; } })();
+const KEY = isDemo ? DEMO_KEY : 'sprinter.v1';
+
+/** Switch between the real data and the demo (reloads the app). Leaving the demo discards it. */
+export function setDemo(on) {
+  try {
+    if (on) localStorage.setItem(MODE_KEY, 'demo');
+    else { localStorage.removeItem(MODE_KEY); localStorage.removeItem(DEMO_KEY); }
+  } catch { /* storage blocked */ }
+  location.reload();
+}
 const THEME_KEY = 'sprinter.theme';
 const DAY = 86_400_000;
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
@@ -365,23 +379,34 @@ export function setTheme(theme) {
 export const advanceSprint = () =>
   commit({ ...state, debugDays: state.debugDays + daysUntil(interval(currentSprint()).end) });
 
-/** Four weeks of history, for trying the timeline (open the app with ?demo). */
+/** Six weeks of sample history (demo mode only: it writes to the demo key). */
 export function seedDemo() {
-  const anchor = addSprints(sprintStart(new Date(), 'weekly'), -3, 'weekly');
+  if (!isDemo) return;
+  const anchor = addSprints(sprintStart(new Date(), 'weekly'), -5, 'weekly');
+  const at = (n) => addSprints(anchor, n, 'weekly').toISOString();
   const t = (emoji, title, row, start, done = null, gaveUp = null) =>
-    ({ ...newTask(emoji, title, row, start), done, gaveUp, doneAt: done === null ? null : anchor.toISOString() });
+    ({ ...newTask(emoji, title, row, start), done, gaveUp, doneAt: done === null ? null : at(done) });
   commit({
     ...empty(),
     config: { eras: [{ from: 0, start: toKey(anchor), cadence: 'weekly', slots: 5 }] },
     tasks: [
       t('🏃', 'Run 10k', 0, 0, 1),
-      t('📚', 'Finish Dune', 1, 0),
+      t('📖', 'Read 2 chapters', 0, 2, 2),
+      t('💻', 'Portfolio update', 0, 3),
+      t('📚', 'Finish Dune', 1, 0, 3),
+      t('🧘', 'Meditate daily', 1, 4, 4),
+      t('🎸', 'Learn a new song', 1, 5),
       t('🎨', 'Termoli poster', 2, 0, 0),
-      t('🧾', 'Pay taxes', 3, 0, null, 2),
-      t('🗣️', 'Italian lesson', 4, 0, 3),
       t('☕️', 'Coffee with Rafa', 2, 1, 1),
-      t('💻', 'Portfolio update', 0, 2),
-      t('🎬', 'Edit motion reel', 2, 2, 2),
+      t('🎬', 'Edit motion reel', 2, 2, 3),
+      t('🛒', 'Big grocery run', 2, 4, 4),
+      t('🍳', 'Cook a new recipe', 2, 5, 5),
+      t('🧾', 'Pay taxes', 3, 0, null, 2),
+      t('🦷', 'Book the dentist', 3, 3, 3),
+      t('✍️', 'Write a blog post', 3, 4, 5),
+      t('🗣️', 'Italian lesson', 4, 0, 3),
+      t('📞', 'Call grandma', 4, 4, 4),
+      t('🌱', 'Repot the plants', 4, 5),
     ],
   });
 }

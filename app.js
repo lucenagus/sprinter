@@ -1,15 +1,17 @@
 import { html, render, useState, useEffect, useLayoutEffect, useRef, useReducer } from './vendor/preact-htm.js';
 import * as S from './store.js';
-import { suggest, PICKER_EMOJI } from './emoji.js';
+import { suggest, normalize } from './emoji.js';
 import { PHOSPHOR } from './icons.js';
 
 // ================= Platform helpers =================
 
 const params = new URLSearchParams(location.search);
 const DEV_URL = params.has('dev');
-if (params.has('demo')) {
-  S.seedDemo();
-  history.replaceState(null, '', location.pathname + (DEV_URL ? '?dev' : ''));
+// Demo mode (Options → Demo mode, or ?demo): sample sprints in their own storage.
+if (params.has('demo') && !S.isDemo) S.setDemo(true);
+else {
+  if (S.isDemo && (params.has('demo') || !S.getState().config)) S.seedDemo();
+  if (params.has('demo')) history.replaceState(null, '', location.pathname + (DEV_URL ? '?dev' : ''));
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
@@ -146,6 +148,77 @@ function SheetHead({ label, onClose }) {
   </div>`;
 }
 
+// ================= Emoji picker =================
+// Every emoji (≈1,900), searchable in English or Portuguese. The list loads the
+// first time the picker opens. Typing an emoji from the system emoji keyboard
+// into the search field picks it straight away, so nothing is out of reach.
+
+let EMOJI_ALL = null;
+const loadEmoji = () => (EMOJI_ALL
+  ? Promise.resolve(EMOJI_ALL)
+  : import('./emoji-data.js').then(({ EMOJI_GROUPS }) => (EMOJI_ALL = EMOJI_GROUPS.map(([name, text]) => ({
+    name,
+    items: text.split('\n').map((line) => {
+      const i = line.indexOf(' ');
+      return { e: line.slice(0, i), words: ` ${line.slice(i + 1)}` };
+    }),
+  })))));
+
+const GRAPHEMES = typeof Intl !== 'undefined' && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
+const IS_EMOJI = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u;
+/** The last emoji typed into a string, if any (keeps skin tones, flags and ZWJ sequences whole). */
+function lastEmoji(s) {
+  if (!s || !IS_EMOJI.test(s)) return null;
+  const parts = GRAPHEMES ? [...GRAPHEMES.segment(s)].map((g) => g.segment) : [...s];
+  return parts.filter((g) => IS_EMOJI.test(g)).at(-1) || null;
+}
+
+function EmojiPicker({ current, suggested, onPick }) {
+  const [q, setQ] = useState('');
+  const [all, setAll] = useState(EMOJI_ALL);
+  useEffect(() => { if (!all) loadEmoji().then(setAll); }, []);
+
+  const onInput = (e) => {
+    const v = e.currentTarget.value;
+    const typed = lastEmoji(v);
+    if (typed) { onPick(typed); return; }
+    setQ(v);
+  };
+
+  const keep = (e) => e.preventDefault(); // tapping an emoji shouldn't close the keyboard
+  const chip = (e) => html`<button key=${e} class=${`chip ${e === current ? 'on' : ''}`}
+    onMouseDown=${keep} onClick=${() => onPick(e)}>${e}</button>`;
+
+  const words = normalize(q).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  let body;
+  if (!all) {
+    body = html`<p class="picker-empty mono s9 ash">Loading…</p>`;
+  } else if (words.length) {
+    const hits = [];
+    for (const g of all) for (const it of g.items) if (words.every((w) => it.words.includes(` ${w}`))) hits.push(it.e);
+    body = hits.length
+      ? html`<div class="picker-grid">${hits.slice(0, 240).map(chip)}</div>`
+      : html`<p class="picker-empty mono s9 ash">Nothing for “${q.trim()}”. Try the emoji keyboard.</p>`;
+  } else {
+    body = [
+      html`<section key="sug"><span class="picker-label mono s9 ash">Suggested</span><div class="picker-grid">${suggested.map(chip)}</div></section>`,
+      ...all.map((g) => html`<section key=${g.name} class="picker-group">
+        <span class="picker-label mono s9 ash">${g.name}</span>
+        <div class="picker-grid">${g.items.map((it) => chip(it.e))}</div>
+      </section>`),
+    ];
+  }
+
+  return html`<div class="picker">
+    <label class="picker-search">
+      <${Ico} n="search" />
+      <input type="search" placeholder="Search, or type any emoji" value=${q} autocomplete="off"
+        autocorrect="off" spellcheck="false" enterkeyhint="search" onInput=${onInput} />
+    </label>
+    <div class="picker-scroll">${body}</div>
+  </div>`;
+}
+
 /** Write a task (emoji suggested while typing), then confirm the commitment. */
 function AddTaskSheet({ heading = 'New task', onCommit, onClose }) {
   const [title, setTitle] = useState('');
@@ -160,7 +233,7 @@ function AddTaskSheet({ heading = 'New task', onCommit, onClose }) {
 
   useEffect(() => { if (!confirming) input.current?.focus({ preventScroll: true }); }, [confirming]);
 
-  const choose = (e) => { setPicked(e); setPicking(false); };
+  const choose = (e) => { setPicked(e); setPicking(false); input.current?.focus({ preventScroll: true }); };
   const next = () => {
     if (!trimmed) return;
     input.current?.blur();
@@ -205,12 +278,12 @@ function AddTaskSheet({ heading = 'New task', onCommit, onClose }) {
           onFocus=${() => setPicking(false)}
           onKeyDown=${(e) => { if (e.key === 'Enter') next(); }} />
       </div>
-      <div>
-        <span class="mono s9 ash">${picking ? 'Pick any emoji' : 'Suggested · tap the circle for more'}</span>
-        ${picking
-          ? html`<div class="picker">${PICKER_EMOJI.map(chip)}</div>`
-          : html`<div class="chips">${suggestions.map(chip)}</div>`}
-      </div>
+      ${picking
+        ? html`<${EmojiPicker} current=${emoji} suggested=${suggestions} onPick=${choose} />`
+        : html`<div>
+            <span class="mono s9 ash">Suggested · tap the circle for every emoji</span>
+            <div class="chips">${suggestions.map(chip)}</div>
+          </div>`}
       <div class="foot">
         <span class="mono s10 ash">${title.length}/32</span>
         <button class="pill" disabled=${!trimmed} onClick=${next}>Add task</button>
@@ -348,7 +421,8 @@ function OptionsSheet({ dev, onClose }) {
       </div>
       ${opt('export', 'Export backup', exportBackup, last ? S.ago(last) : 'Never')}
       ${opt('import', 'Import backup', () => file.current.click())}
-      ${opt('reset', 'Reset everything', () => setView('reset'))}
+      ${opt('sparkle', 'Demo mode', () => { haptic(); S.setDemo(!S.isDemo); }, S.isDemo ? 'On' : 'Off')}
+      ${opt('reset', S.isDemo ? 'Reset demo' : 'Reset everything', () => (S.isDemo ? (haptic(), S.seedDemo(), onClose()) : setView('reset')))}
       ${dev && html`<span class="mono s9 ash opts-label">Developer</span>`}
       ${dev && opt('forward', 'Simulate next sprint', () => { haptic(); S.advanceSprint(); onClose(); })}
     </div>
@@ -761,7 +835,7 @@ function Timeline({ s }) {
     <header class=${`tl-head ${sprint ? 'is-sprint' : ''}`}>
       <div class="head-wide">
         <div class="head-row">
-          <h1 class="brand" ...${longPress}><span class="logo" role="img" aria-label="Sprinter" /></h1>
+          <h1 class="brand" ...${longPress}><span class="logo" role="img" aria-label="Sprinter" />${S.isDemo && html`<span class="demo-tag mono s9">Demo</span>`}</h1>
           <div class="head-right">
             ${!sprint && nowBtn}
             <button class="icon-btn" aria-label="Options" onClick=${() => { haptic(); open({ type: 'options' }); }}><${Ico} n="options" /></button>
@@ -801,7 +875,72 @@ function Timeline({ s }) {
     ${pop && html`<${ActionPopup} key=${pop.key} pop=${pop} onClose=${closePop} />`}`;
 }
 
+/**
+ * Vertical number picker: drag (or flick) up and down to change the value.
+ * Bigger numbers sit above (so + is up); the neighbours peek in and fade out,
+ * and it snaps to whole numbers.
+ */
+const WHEEL_ROW = 128;
+function NumberWheel({ value, min, max, onChange }) {
+  const el = useRef();
+  const values = Array.from({ length: max - min + 1 }, (_, i) => max - i);
+  const topFor = (v) => (max - v) * WHEEL_ROW;
+  const at = () => Math.min(max, Math.max(min, max - Math.round(el.current.scrollTop / WHEEL_ROW)));
+
+  useLayoutEffect(() => { el.current.scrollTop = topFor(value); }, []);
+  // Buttons move the value: glide the strip to it (a drag already put it there).
+  useEffect(() => {
+    if (el.current && at() !== value) el.current.scrollTo({ top: topFor(value), behavior: 'smooth' });
+  }, [value, min]);
+
+  const onScroll = () => { const v = at(); if (v !== value) onChange(v); };
+
+  return html`<div class="wheel" ref=${el} onScroll=${onScroll} role="spinbutton"
+      aria-valuemin=${min} aria-valuemax=${max} aria-valuenow=${value}>
+    ${values.map((v) => html`<span key=${v} class=${`wheel-num ${v === value ? 'on' : ''}`}
+      onClick=${() => v !== value && onChange(v)}>${v}</span>`)}
+  </div>`;
+}
+
 // ================= Onboarding =================
+
+/**
+ * A made-up history in wideview style (columns of task cards), for the welcome
+ * screen. Each row is a run of tasks: carried sprints show an arrow, the last
+ * sprint shows a check (done, green) or a skull (given up, black). Every row ends on
+ * the last column, so the strip can repeat seamlessly.
+ */
+const REEL = (() => {
+  const cols = 9, rows = 5;
+  let seed = 11;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const grid = Array.from({ length: cols }, () => []);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols;) {
+      const x = rnd();
+      const len = Math.min(cols - c, x < 0.5 ? 1 : x < 0.82 ? 2 : 3);
+      const end = rnd() < 0.72 ? 'done' : 'abandoned';
+      for (let k = 0; k < len; k++) grid[c + k][r] = { state: k === len - 1 ? end : 'missed', linked: k > 0 };
+      c += len;
+    }
+  }
+  return grid;
+})();
+
+function WelcomeReel() {
+  return html`<div class="reel reveal" style="--i:2" aria-hidden="true">
+    <div class="reel-track">
+      ${[...REEL, ...REEL].map((col, i) => html`<div class="reel-col" key=${i}>
+        ${col.map((t, r) => html`<div class=${`card ${t.state}`} key=${r}>
+          ${t.linked && html`<i class="reel-link" />`}
+          <span class="card-icon">${t.state === 'missed'
+            ? html`<${Ico} n="arrowBold" />`
+            : html`<${Ico} n=${t.state === 'done' ? 'checkCircleFill' : 'skull'} />`}</span>
+        </div>`)}
+      </div>`)}
+    </div>
+  </div>`;
+}
 
 function Onboarding() {
   const [step, setStep] = useState(0);
@@ -818,19 +957,10 @@ function Onboarding() {
   };
 
   const welcome = () => html`
-    <div class="spacer" />
-    <h1 class="hero reveal"><span class="logo" role="img" aria-label="Sprinter" /></h1>
-    <div class="mono s11 reveal" style="--i:1; margin-top:10px">Personal sprints</div>
-    <div class="rule reveal" style="--i:2; margin:28px 0" />
-    <p class="lead reveal" style="--i:3">Commit to a few things each week or month. What you don't finish follows you. What you finish frees up room.</p>
-    <div class="how reveal" style="--i:4">
-      <span class="mono s10 ash">How it works</span>
-      <span class="mono s11">Unfinished tasks carry over</span>
-      <span class="mono s11">Finished tasks free their slot</span>
-      <span class="mono s11">Nothing gets erased</span>
-    </div>
-    <div class="spacer" />
-    <button class="pill block reveal" style="--i:5" onClick=${() => go(1)}>Get started</button>`;
+    <h1 class="hero reveal" style="margin-top:16px"><span class="logo" role="img" aria-label="Sprinter" /></h1>
+    <p class="lead reveal" style="--i:1; margin-top:24px">Commit to a few things each week or month. What you don't finish follows you. What you finish frees up room.</p>
+    <${WelcomeReel} />
+    <button class="pill block reveal" style="--i:3" onClick=${() => go(1)}>Get started</button>`;
 
   const option = (value, name, caption, i) => html`
     <button key=${value} class=${`option reveal ${cadence === value ? 'on' : ''}`} style=${`--i:${i}`}
@@ -849,22 +979,22 @@ function Onboarding() {
     <button class="pill block reveal" style="--i:3" onClick=${() => go(2)}>Continue</button>`;
 
   const change = (delta) => { haptic(); setCount((c) => c + delta); };
-  const countStep = () => html`
-    <h2 class="step-title reveal">How many tasks<br />per sprint?</h2>
-    <div class="count reveal" style="--i:1">
-      <div>
-        <span class="count-num" key=${count}>${count}</span>
-        <div class="mono s10 ash" style="margin:18px 0">Min 2 · Max 12</div>
-        <div class="steppers">
-          <button class="round" aria-label="Fewer" disabled=${count <= Math.max(2, drafts.length)} onClick=${() => change(-1)}><${Ico} n="minus" /></button>
-          <button class="round" aria-label="More" disabled=${count >= 12} onClick=${() => change(1)}><${Ico} n="plus" /></button>
-        </div>
+  const countStep = () => {
+    const lo = Math.max(2, drafts.length);
+    return html`
+    <div class="count">
+      <div class="count-picker reveal">
+        <button class="round" aria-label="More" disabled=${count >= 12} onClick=${() => change(1)}><${Ico} n="plus" /></button>
+        <${NumberWheel} value=${count} min=${lo} max=${12} onChange=${(v) => { haptic(); setCount(v); }} />
+        <button class="round" aria-label="Fewer" disabled=${count <= lo} onClick=${() => change(-1)}><${Ico} n="minus" /></button>
       </div>
-      <div class="mini-bar" aria-hidden="true">${Array.from({ length: count }, (_, i) => html`<i key=${i} />`)}</div>
+      <div class="count-main">
+        <h2 class="step-title reveal" style="--i:1">How\u00A0many tasks\u00A0per sprint?</h2>
+        <p class="quiet reveal" style="--i:2; margin-top:12px">Pick what you<br />can really finish.</p>
+      </div>
     </div>
-    <p class="quiet reveal" style="--i:2; margin-top:32px">Pick what you can really finish. Whatever stays open follows you into the next sprint.</p>
-    <div class="spacer" />
     <button class="pill block reveal" style="--i:3" onClick=${() => go(3)}>Continue</button>`;
+  };
 
   const firstTasks = () => {
     const range = S.firstInterval(cadence);
@@ -891,7 +1021,6 @@ function Onboarding() {
         })}
       </div>
       <div class="start reveal" style="--i:3">
-        <span class="mono s10 ash">${drafts.length} of ${count} slots filled</span>
         <button class="pill block" disabled=${!drafts.length}
           onClick=${() => { haptic(); S.completeOnboarding(cadence, count, drafts); }}>Start sprint</button>
       </div>`;

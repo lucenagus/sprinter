@@ -96,15 +96,6 @@ export const normalize = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
 const INDEX = TABLE.map(([emoji, words]) => ({ emoji, keywords: normalize(words).split(' ') }));
 
 /** Every emoji offered in the picker grid. */
-export const PICKER_EMOJI = [...new Set([
-  ...DEFAULT_EMOJI,
-  ...TABLE.map(([e]) => e),
-  '💡', '🧭', '🗺️', '⏰', '🧘‍♀️', '🥾', '🏄', '🧗', '🎹', '🥁', '🎻', '📷', '🖥️', '⌨️', '🖊️',
-  '📐', '🧮', '💸', '🏡', '🛠️', '🧯', '🍎', '🥑', '🍕', '🍣', '🥐', '🍪', '🫖', '🌅', '🌙',
-  '☀️', '🌧️', '🌊', '🏔️', '🌳', '🌸', '🐾', '🧸', '🎈', '💌', '📮', '🔑', '🧽', '🪥', '🛁',
-  '💪', '🙌', '👀', '🫶', '😊', '😎', '🤓', '🥳', '😌', '🤯',
-])];
-
 export function suggest(text, limit = 6) {
   const words = normalize(text).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (!words.length) return DEFAULT_EMOJI.slice(0, limit);

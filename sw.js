@@ -1,11 +1,11 @@
 // Offline support. Network first, so a new version shows up as soon as the
 // phone is online; the cache answers when it isn't.
-const CACHE = 'sprinter-v39';
+const CACHE = 'sprinter-v58';
 const ASSETS = [
-  './', './index.html', './styles.css', './app.js', './store.js', './emoji.js', './icons.js', './logo.svg',
+  './', './index.html', './styles.css', './app.js', './store.js', './emoji.js', './emoji-data.js', './icons.js', './logo.svg',
   './vendor/preact-htm.js', './manifest.webmanifest',
   './fonts/InstrumentSans.ttf', './fonts/SometypeMono.ttf',
-  './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
+  './icons/icon.svg', './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
